@@ -35,7 +35,6 @@ import (
 	logsv1 "k8s.io/component-base/logs/api/v1"
 	"k8s.io/component-base/term"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/ptr"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/config"
@@ -160,46 +159,53 @@ func run(ctx context.Context, opts *options.Options) error {
 	if err != nil {
 		return fmt.Errorf("error building kubeconfig of member cluster: %w", err)
 	}
-	clusterKubeClient := kubeclientset.NewForConfigOrDie(clusterConfig)
-	controlPlaneKubeClient := kubeclientset.NewForConfigOrDie(controlPlaneRestConfig)
-	karmadaClient := karmadaclientset.NewForConfigOrDie(controlPlaneRestConfig)
+	if opts.RegisterCluster {
+		clusterKubeClient := kubeclientset.NewForConfigOrDie(clusterConfig)
+		controlPlaneKubeClient := kubeclientset.NewForConfigOrDie(controlPlaneRestConfig)
+		karmadaClient := karmadaclientset.NewForConfigOrDie(controlPlaneRestConfig)
 
-	registerOption := util.ClusterRegisterOption{
-		ClusterNamespace:   opts.ClusterNamespace,
-		ClusterName:        opts.ClusterName,
-		ReportSecrets:      opts.ReportSecrets,
-		ClusterAPIEndpoint: opts.ClusterAPIEndpoint,
-		ProxyServerAddress: opts.ProxyServerAddress,
-		ClusterProvider:    opts.ClusterProvider,
-		ClusterRegion:      opts.ClusterRegion,
-		ClusterZones:       opts.ClusterZones,
-		DryRun:             false,
-		ControlPlaneConfig: controlPlaneRestConfig,
-		ClusterConfig:      clusterConfig,
-	}
+		registerOption := util.ClusterRegisterOption{
+			ClusterNamespace:   opts.ClusterNamespace,
+			ClusterName:        opts.ClusterName,
+			ReportSecrets:      opts.ReportSecrets,
+			ClusterAPIEndpoint: opts.ClusterAPIEndpoint,
+			ProxyServerAddress: opts.ProxyServerAddress,
+			ClusterProvider:    opts.ClusterProvider,
+			ClusterRegion:      opts.ClusterRegion,
+			ClusterZones:       opts.ClusterZones,
+			DryRun:             false,
+			ControlPlaneConfig: controlPlaneRestConfig,
+			ClusterConfig:      clusterConfig,
+		}
 
-	registerOption.ClusterID, err = util.ObtainClusterID(clusterKubeClient)
-	if err != nil {
-		return err
-	}
+		registerOption.ClusterID, err = util.ObtainClusterID(clusterKubeClient)
+		if err != nil {
+			return err
+		}
 
-	if err = registerOption.Validate(karmadaClient, true); err != nil {
-		return err
-	}
+		if err = registerOption.Validate(karmadaClient, true); err != nil {
+			return err
+		}
 
-	clusterSecret, impersonatorSecret, err := util.ObtainCredentialsFromMemberCluster(clusterKubeClient, registerOption)
-	if err != nil {
-		return err
-	}
-	if clusterSecret != nil {
-		registerOption.Secret = *clusterSecret
-	}
-	if impersonatorSecret != nil {
-		registerOption.ImpersonatorSecret = *impersonatorSecret
-	}
-	err = util.RegisterClusterInControllerPlane(registerOption, controlPlaneKubeClient, generateClusterInControllerPlane)
-	if err != nil {
-		return fmt.Errorf("failed to register with karmada control plane: %w", err)
+		clusterSecret, impersonatorSecret, err := util.ObtainCredentialsFromMemberCluster(clusterKubeClient, registerOption)
+		if err != nil {
+			return err
+		}
+		if clusterSecret != nil {
+			registerOption.Secret = *clusterSecret
+		}
+		if impersonatorSecret != nil {
+			registerOption.ImpersonatorSecret = *impersonatorSecret
+		}
+		if err = util.RegisterClusterInControllerPlane(registerOption, controlPlaneKubeClient, generateClusterInControllerPlane); err != nil {
+			return fmt.Errorf("failed to register with karmada control plane: %w", err)
+		}
+	} else {
+		karmadaClient := karmadaclientset.NewForConfigOrDie(controlPlaneRestConfig)
+		memberKubeClient := kubeclientset.NewForConfigOrDie(clusterConfig)
+		if err = validateExternallyRegisteredCluster(ctx, opts, karmadaClient, memberKubeClient); err != nil {
+			return err
+		}
 	}
 
 	executionSpace := names.GenerateExecutionSpaceName(opts.ClusterName)
@@ -227,7 +233,7 @@ func run(ctx context.Context, opts *options.Options) error {
 				schema.GroupKind{Group: clusterv1alpha1.GroupName, Kind: "Cluster"}.String(): opts.ConcurrentClusterSyncs,
 			},
 			CacheSyncTimeout: opts.ClusterCacheSyncTimeout.Duration,
-			UsePriorityQueue: ptr.To(features.FeatureGate.Enabled(features.ControllerPriorityQueue)),
+			UsePriorityQueue: new(features.FeatureGate.Enabled(features.ControllerPriorityQueue)),
 		},
 		NewCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
 			opts.DefaultTransform = fedinformer.StripUnusedFields

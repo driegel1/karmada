@@ -25,6 +25,7 @@ import (
 
 	"github.com/karmada-io/karmada/pkg/estimator/pb"
 	"github.com/karmada-io/karmada/pkg/estimator/server/framework"
+	"github.com/karmada-io/karmada/pkg/features"
 	schedcache "github.com/karmada-io/karmada/pkg/util/lifted/scheduler/cache"
 )
 
@@ -43,7 +44,14 @@ func (es *AccurateSchedulerEstimatorServer) EstimateReplicas(ctx context.Context
 		return 0, nil
 	}
 
-	maxAvailableReplicas, err := es.estimateReplicas(ctx, snapShot, request.GetReplicaRequirements())
+	estCtx := framework.ReplicaEstimationContext{
+		Snapshot:            snapShot,
+		ReplicaRequirements: request.GetReplicaRequirements(),
+	}
+	if features.FeatureGate.Enabled(features.SchedulingOvercommitProtection) {
+		estCtx.AssumedWorkloads = request.GetAssumedWorkloads()
+	}
+	maxAvailableReplicas, err := es.estimateReplicas(ctx, estCtx)
 	if err != nil {
 		return 0, err
 	}
@@ -52,8 +60,8 @@ func (es *AccurateSchedulerEstimatorServer) EstimateReplicas(ctx context.Context
 	return maxAvailableReplicas, nil
 }
 
-func (es *AccurateSchedulerEstimatorServer) estimateReplicas(ctx context.Context, snapshot *schedcache.Snapshot, requirements *pb.ReplicaRequirements) (int32, error) {
-	replicas, ret := es.estimateFramework.RunEstimateReplicasPlugins(ctx, snapshot, requirements)
+func (es *AccurateSchedulerEstimatorServer) estimateReplicas(ctx context.Context, estCtx framework.ReplicaEstimationContext) (int32, error) {
+	replicas, ret := es.estimateFramework.RunEstimateReplicasPlugins(ctx, estCtx)
 
 	// No replicas can be scheduled on the cluster, skip further checks and return 0
 	if ret.IsUnschedulable() {
@@ -82,12 +90,15 @@ func (es *AccurateSchedulerEstimatorServer) EstimateComponents(ctx context.Conte
 		return 0, nil
 	}
 
-	maxAvailableComponentSets, err := es.estimateComponents(ctx, framework.ComponentEstimationContext{
-		Snapshot:         snapShot,
-		Components:       request.Components,
-		Namespace:        request.Namespace,
-		AssumedWorkloads: request.GetAssumedWorkloads(),
-	})
+	estCtx := framework.ComponentEstimationContext{
+		Snapshot:   snapShot,
+		Components: request.Components,
+		Namespace:  request.Namespace,
+	}
+	if features.FeatureGate.Enabled(features.SchedulingOvercommitProtection) {
+		estCtx.AssumedWorkloads = request.GetAssumedWorkloads()
+	}
+	maxAvailableComponentSets, err := es.estimateComponents(ctx, estCtx)
 	if err != nil {
 		return 0, err
 	}
