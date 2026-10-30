@@ -4,9 +4,6 @@ VERSION ?= '$(shell hack/version.sh)'
 
 # Images management
 REGISTRY?="docker.io/karmada"
-REGISTRY_USER_NAME?=""
-REGISTRY_PASSWORD?=""
-REGISTRY_SERVER_ADDRESS?=""
 
 TARGETS := karmada-aggregated-apiserver \
 			karmada-controller-manager \
@@ -116,31 +113,14 @@ GOTEST=gotestsum ${GOTESTSUM_FLAGS} --
 endif
 
 .PHONY: test
-# TODO: remove the tag `kubernetes_protomessage_one_more_release` once the estimator grpc totally remove the dependency of kubernetes protomessage.
-test: GO_TEST_FLAGS ?= --race --v -covermode=atomic -tags kubernetes_protomessage_one_more_release
+
+test: GO_TEST_FLAGS ?= --race --v -covermode=atomic
 test: install_gotestsum
 	mkdir -p ./_output/coverage/
 	$(GOTEST) $(GO_TEST_FLAGS) ./pkg/... -coverprofile=./_output/coverage/coverage_pkg.txt
 	$(GOTEST) $(GO_TEST_FLAGS) ./cmd/... -coverprofile=./_output/coverage/coverage_cmd.txt
 	$(GOTEST) $(GO_TEST_FLAGS) ./examples/... -coverprofile=./_output/coverage/coverage_examples.txt
 	$(GOTEST) $(GO_TEST_FLAGS) ./operator/... -coverprofile=./_output/coverage/coverage_operator.txt
-
-upload-images: images
-	@echo "push images to $(REGISTRY)"
-ifneq ($(REGISTRY_USER_NAME), "")
-	docker login -u ${REGISTRY_USER_NAME} -p ${REGISTRY_PASSWORD} ${REGISTRY_SERVER_ADDRESS}
-endif
-	docker push ${REGISTRY}/karmada-controller-manager:${VERSION}
-	docker push ${REGISTRY}/karmada-scheduler:${VERSION}
-	docker push ${REGISTRY}/karmada-descheduler:${VERSION}
-	docker push ${REGISTRY}/karmada-webhook:${VERSION}
-	docker push ${REGISTRY}/karmada-agent:${VERSION}
-	docker push ${REGISTRY}/karmada-scheduler-estimator:${VERSION}
-	docker push ${REGISTRY}/karmada-interpreter-webhook-example:${VERSION}
-	docker push ${REGISTRY}/karmada-aggregated-apiserver:${VERSION}
-	docker push ${REGISTRY}/karmada-search:${VERSION}
-	docker push ${REGISTRY}/karmada-operator:${VERSION}
-	docker push ${REGISTRY}/karmada-metrics-adapter:${VERSION}
 
 # Build and package binary
 #

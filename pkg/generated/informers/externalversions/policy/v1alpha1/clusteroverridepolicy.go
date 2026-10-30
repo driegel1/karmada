@@ -28,16 +28,45 @@ import (
 	policyv1alpha1 "github.com/karmada-io/karmada/pkg/generated/listers/policy/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
 )
 
 // ClusterOverridePolicyInformer provides access to a shared informer and lister for
-// ClusterOverridePolicies.
+// ClusterOverridePolicies. Prefer using the type-safe variant (see [TypedClusterOverridePolicyInformer]).
 type ClusterOverridePolicyInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() policyv1alpha1.ClusterOverridePolicyLister
 }
+
+// TypedClusterOverridePolicyInformer provides access to a shared informer and lister for
+// ClusterOverridePolicies, including the type-safe TypedInformer variant.
+// It is a superset of ClusterOverridePolicyInformer.
+type TypedClusterOverridePolicyInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() ClusterOverridePolicyIndexInformer
+	Lister() policyv1alpha1.ClusterOverridePolicyLister
+}
+
+// ClusterOverridePolicyIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type ClusterOverridePolicyIndexInformer cache.TypedSharedIndexInformer[*apispolicyv1alpha1.ClusterOverridePolicy]
+
+// ClusterOverridePolicyHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for ClusterOverridePolicy.
+type ClusterOverridePolicyHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apispolicyv1alpha1.ClusterOverridePolicy]
+
+// ClusterOverridePolicyDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for ClusterOverridePolicy.
+type ClusterOverridePolicyDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apispolicyv1alpha1.ClusterOverridePolicy]
+
+// ClusterOverridePolicyFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for ClusterOverridePolicy.
+type ClusterOverridePolicyFilteringHandler = cache.TypedFilteringResourceEventHandler[*apispolicyv1alpha1.ClusterOverridePolicy]
+
+// ClusterOverridePolicyIndexers is a specialization of [cache.TypedIndexers] for ClusterOverridePolicy.
+type ClusterOverridePolicyIndexers = cache.TypedIndexers[*apispolicyv1alpha1.ClusterOverridePolicy]
+
+// DeletedClusterOverridePolicy is a specialization of [cache.DeletedObject] for ClusterOverridePolicy.
+type DeletedClusterOverridePolicy = cache.DeletedObject[*apispolicyv1alpha1.ClusterOverridePolicy]
 
 type clusterOverridePolicyInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -47,55 +76,132 @@ type clusterOverridePolicyInformer struct {
 // NewClusterOverridePolicyInformer constructs a new informer for ClusterOverridePolicy type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedClusterOverridePolicyInformer]).
 func NewClusterOverridePolicyInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredClusterOverridePolicyInformer(client, resyncPeriod, indexers, nil)
+	return NewClusterOverridePolicyInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedClusterOverridePolicyInformer constructs a new informer for ClusterOverridePolicy type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedClusterOverridePolicyInformer(client versioned.Interface, resyncPeriod time.Duration, indexers ClusterOverridePolicyIndexers) ClusterOverridePolicyIndexInformer {
+	return NewTypedClusterOverridePolicyInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredClusterOverridePolicyInformer constructs a new informer for ClusterOverridePolicy type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredClusterOverridePolicyInformer]).
 func NewFilteredClusterOverridePolicyInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return cache.NewSharedIndexInformer(
+	return NewTypedClusterOverridePolicyInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredClusterOverridePolicyInformer constructs a new informer for ClusterOverridePolicy type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredClusterOverridePolicyInformer(client versioned.Interface, resyncPeriod time.Duration, indexers ClusterOverridePolicyIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) ClusterOverridePolicyIndexInformer {
+	return NewTypedClusterOverridePolicyInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
+}
+
+// NewClusterOverridePolicyInformerWithOptions constructs a new informer for ClusterOverridePolicy type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedClusterOverridePolicyInformerWithOptions]).
+func NewClusterOverridePolicyInformerWithOptions(client versioned.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedClusterOverridePolicyInformerWithOptions(client, options)
+}
+
+// NewTypedClusterOverridePolicyInformerWithOptions constructs a new informer for ClusterOverridePolicy type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedClusterOverridePolicyInformerWithOptions(client versioned.Interface, options internalinterfaces.InformerOptions) ClusterOverridePolicyIndexInformer {
+	gvr := schema.GroupVersionResource{Group: "policy.karmada.io", Version: "v1alpha1", Resource: "clusteroverridepolicys"}
+	identifier := options.InformerName.WithResource(gvr)
+	tweakListOptions := options.TweakListOptions
+	return cache.NewTypedSharedIndexInformer[*apispolicyv1alpha1.ClusterOverridePolicy](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
-			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
+			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.PolicyV1alpha1().ClusterOverridePolicies().List(context.Background(), options)
+				return client.PolicyV1alpha1().ClusterOverridePolicies().List(context.Background(), opts)
 			},
-			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
+			WatchFunc: func(opts v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.PolicyV1alpha1().ClusterOverridePolicies().Watch(context.Background(), options)
+				return client.PolicyV1alpha1().ClusterOverridePolicies().Watch(context.Background(), opts)
 			},
-			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+			ListWithContextFunc: func(ctx context.Context, opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.PolicyV1alpha1().ClusterOverridePolicies().List(ctx, options)
+				return client.PolicyV1alpha1().ClusterOverridePolicies().List(ctx, opts)
 			},
-			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+			WatchFuncWithContext: func(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.PolicyV1alpha1().ClusterOverridePolicies().Watch(ctx, options)
+				return client.PolicyV1alpha1().ClusterOverridePolicies().Watch(ctx, opts)
 			},
 		}, client),
 		&apispolicyv1alpha1.ClusterOverridePolicy{},
-		resyncPeriod,
-		indexers,
-	)
+		cache.SharedIndexInformerOptions{
+			ResyncPeriod: options.ResyncPeriod,
+			Indexers:     options.Indexers,
+			Identifier:   identifier,
+		},
+	))
 }
 
 func (f *clusterOverridePolicyInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredClusterOverridePolicyInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	return NewTypedClusterOverridePolicyInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *clusterOverridePolicyInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apispolicyv1alpha1.ClusterOverridePolicy{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *clusterOverridePolicyInformer) TypedInformer() ClusterOverridePolicyIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apispolicyv1alpha1.ClusterOverridePolicy](f.factory.InformerFor(&apispolicyv1alpha1.ClusterOverridePolicy{}, f.defaultInformer))
 }
 
 func (f *clusterOverridePolicyInformer) Lister() policyv1alpha1.ClusterOverridePolicyLister {
 	return policyv1alpha1.NewClusterOverridePolicyLister(f.Informer().GetIndexer())
+}
+
+// ToTypedClusterOverridePolicyInformer converts an untyped informer into a TypedClusterOverridePolicyInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *ClusterOverridePolicy. If that is not the case, calling type-safe methods of the returned
+// TypedClusterOverridePolicyInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedClusterOverridePolicyInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedClusterOverridePolicyInformer(informer ClusterOverridePolicyInformer) TypedClusterOverridePolicyInformer {
+	if informer, ok := informer.(TypedClusterOverridePolicyInformer); ok {
+		return informer
+	}
+	return &clusterOverridePolicyTypedInformerAdapter{informer}
+}
+
+type clusterOverridePolicyTypedInformerAdapter struct {
+	ClusterOverridePolicyInformer
+}
+
+func (a *clusterOverridePolicyTypedInformerAdapter) TypedInformer() ClusterOverridePolicyIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apispolicyv1alpha1.ClusterOverridePolicy](a.Informer())
+}
+
+// ToClusterOverridePolicyIndexInformer converts an untyped informer into a ClusterOverridePolicyIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *ClusterOverridePolicy. If that is not the case, calling type-safe methods of the returned
+// ClusterOverridePolicyIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a ClusterOverridePolicyIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToClusterOverridePolicyIndexInformer(informer cache.SharedIndexInformer) ClusterOverridePolicyIndexInformer {
+	if informer, ok := informer.(ClusterOverridePolicyIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apispolicyv1alpha1.ClusterOverridePolicy](informer)
 }

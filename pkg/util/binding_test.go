@@ -24,7 +24,6 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/ptr"
 
 	policyv1alpha1 "github.com/karmada-io/karmada/pkg/apis/policy/v1alpha1"
 	workv1alpha2 "github.com/karmada-io/karmada/pkg/apis/work/v1alpha2"
@@ -179,9 +178,27 @@ func TestIsBindingReplicasChanged(t *testing.T) {
 			strategy: &policyv1alpha1.ReplicaSchedulingStrategy{ReplicaSchedulingType: policyv1alpha1.ReplicaSchedulingTypeDivided},
 			expected: true,
 		},
+		{
+			name: "component replicas changed with feature gate disabled",
+			bindingSpec: &workv1alpha2.ResourceBindingSpec{
+				Components: []workv1alpha2.Component{
+					{Name: "jobmanager", Replicas: 1},
+					{Name: "taskmanager", Replicas: 6},
+				},
+				Clusters: []workv1alpha2.TargetCluster{{
+					Name: ClusterMember1,
+					Components: []workv1alpha2.TargetComponent{
+						{Name: "jobmanager", Replicas: 1},
+						{Name: "taskmanager", Replicas: 4},
+					},
+				}},
+			},
+			strategy: &policyv1alpha1.ReplicaSchedulingStrategy{ReplicaSchedulingType: policyv1alpha1.ReplicaSchedulingTypeDivided},
+			expected: false,
+		},
 	}
 
-	// Component-based workload failover tests require the MultiplePodTemplatesScheduling feature gate.
+	// Component-based workload tests require the MultiplePodTemplatesScheduling feature gate.
 	componentTests := []struct {
 		name        string
 		bindingSpec *workv1alpha2.ResourceBindingSpec
@@ -224,6 +241,171 @@ func TestIsBindingReplicasChanged(t *testing.T) {
 			strategy: &policyv1alpha1.ReplicaSchedulingStrategy{ReplicaSchedulingType: policyv1alpha1.ReplicaSchedulingTypeDuplicated},
 			expected: false,
 		},
+		{
+			name: "multi-component scale up should trigger rescheduling",
+			bindingSpec: &workv1alpha2.ResourceBindingSpec{
+				Components: []workv1alpha2.Component{
+					{Name: "jobmanager", Replicas: 1},
+					{Name: "taskmanager", Replicas: 6},
+				},
+				Clusters: []workv1alpha2.TargetCluster{{
+					Name: ClusterMember1,
+					Components: []workv1alpha2.TargetComponent{
+						{Name: "jobmanager", Replicas: 1},
+						{Name: "taskmanager", Replicas: 4},
+					},
+				}},
+			},
+			strategy: &policyv1alpha1.ReplicaSchedulingStrategy{ReplicaSchedulingType: policyv1alpha1.ReplicaSchedulingTypeDivided},
+			expected: true,
+		},
+		{
+			name: "multi-component scale down should trigger rescheduling",
+			bindingSpec: &workv1alpha2.ResourceBindingSpec{
+				Components: []workv1alpha2.Component{
+					{Name: "jobmanager", Replicas: 1},
+					{Name: "taskmanager", Replicas: 4},
+				},
+				Clusters: []workv1alpha2.TargetCluster{{
+					Name: ClusterMember1,
+					Components: []workv1alpha2.TargetComponent{
+						{Name: "jobmanager", Replicas: 1},
+						{Name: "taskmanager", Replicas: 6},
+					},
+				}},
+			},
+			strategy: &policyv1alpha1.ReplicaSchedulingStrategy{ReplicaSchedulingType: policyv1alpha1.ReplicaSchedulingTypeDivided},
+			expected: true,
+		},
+		{
+			name: "mixed multi-component scale should trigger rescheduling",
+			bindingSpec: &workv1alpha2.ResourceBindingSpec{
+				Components: []workv1alpha2.Component{
+					{Name: "jobmanager", Replicas: 2},
+					{Name: "taskmanager", Replicas: 4},
+				},
+				Clusters: []workv1alpha2.TargetCluster{{
+					Name: ClusterMember1,
+					Components: []workv1alpha2.TargetComponent{
+						{Name: "jobmanager", Replicas: 1},
+						{Name: "taskmanager", Replicas: 6},
+					},
+				}},
+			},
+			strategy: &policyv1alpha1.ReplicaSchedulingStrategy{ReplicaSchedulingType: policyv1alpha1.ReplicaSchedulingTypeDivided},
+			expected: true,
+		},
+		{
+			name: "equal multi-component replicas should not trigger rescheduling",
+			bindingSpec: &workv1alpha2.ResourceBindingSpec{
+				Components: []workv1alpha2.Component{
+					{Name: "jobmanager", Replicas: 1},
+					{Name: "taskmanager", Replicas: 4},
+				},
+				Clusters: []workv1alpha2.TargetCluster{{
+					Name: ClusterMember1,
+					Components: []workv1alpha2.TargetComponent{
+						{Name: "taskmanager", Replicas: 4},
+						{Name: "jobmanager", Replicas: 1},
+					},
+				}},
+			},
+			strategy: &policyv1alpha1.ReplicaSchedulingStrategy{ReplicaSchedulingType: policyv1alpha1.ReplicaSchedulingTypeDivided},
+			expected: false,
+		},
+		{
+			name: "missing scheduled component results should not trigger scale rescheduling",
+			bindingSpec: &workv1alpha2.ResourceBindingSpec{
+				Components: []workv1alpha2.Component{
+					{Name: "jobmanager", Replicas: 1},
+					{Name: "taskmanager", Replicas: 4},
+				},
+				Clusters: []workv1alpha2.TargetCluster{{Name: ClusterMember1}},
+			},
+			strategy: &policyv1alpha1.ReplicaSchedulingStrategy{ReplicaSchedulingType: policyv1alpha1.ReplicaSchedulingTypeDivided},
+			expected: false,
+		},
+		{
+			name: "component name change should trigger rescheduling",
+			bindingSpec: &workv1alpha2.ResourceBindingSpec{
+				Components: []workv1alpha2.Component{
+					{Name: "jobmanager", Replicas: 2},
+					{Name: "worker", Replicas: 4},
+				},
+				Clusters: []workv1alpha2.TargetCluster{{
+					Name: ClusterMember1,
+					Components: []workv1alpha2.TargetComponent{
+						{Name: "jobmanager", Replicas: 1},
+						{Name: "taskmanager", Replicas: 4},
+					},
+				}},
+			},
+			strategy: &policyv1alpha1.ReplicaSchedulingStrategy{ReplicaSchedulingType: policyv1alpha1.ReplicaSchedulingTypeDivided},
+			expected: true,
+		},
+		{
+			name: "component count change should trigger rescheduling",
+			bindingSpec: &workv1alpha2.ResourceBindingSpec{
+				Components: []workv1alpha2.Component{
+					{Name: "jobmanager", Replicas: 1},
+					{Name: "taskmanager", Replicas: 4},
+					{Name: "sidecar", Replicas: 1},
+				},
+				Clusters: []workv1alpha2.TargetCluster{{
+					Name: ClusterMember1,
+					Components: []workv1alpha2.TargetComponent{
+						{Name: "jobmanager", Replicas: 1},
+						{Name: "taskmanager", Replicas: 4},
+					},
+				}},
+			},
+			strategy: &policyv1alpha1.ReplicaSchedulingStrategy{ReplicaSchedulingType: policyv1alpha1.ReplicaSchedulingTypeDivided},
+			expected: true,
+		},
+		{
+			name: "later target cluster component change should trigger rescheduling",
+			bindingSpec: &workv1alpha2.ResourceBindingSpec{
+				Components: []workv1alpha2.Component{{Name: "jobmanager", Replicas: 1}, {Name: "taskmanager", Replicas: 6}},
+				Clusters: []workv1alpha2.TargetCluster{
+					{Name: ClusterMember1, Components: []workv1alpha2.TargetComponent{{Name: "jobmanager", Replicas: 1}, {Name: "taskmanager", Replicas: 6}}},
+					{Name: ClusterMember2, Components: []workv1alpha2.TargetComponent{{Name: "jobmanager", Replicas: 1}, {Name: "taskmanager", Replicas: 4}}},
+				},
+			},
+			strategy: &policyv1alpha1.ReplicaSchedulingStrategy{ReplicaSchedulingType: policyv1alpha1.ReplicaSchedulingTypeDuplicated},
+			expected: true,
+		},
+		{
+			name: "removing a component down to one should trigger rescheduling",
+			bindingSpec: &workv1alpha2.ResourceBindingSpec{
+				Components: []workv1alpha2.Component{{Name: "jobmanager", Replicas: 1}},
+				Clusters: []workv1alpha2.TargetCluster{{
+					Name:       ClusterMember1,
+					Components: []workv1alpha2.TargetComponent{{Name: "jobmanager", Replicas: 1}, {Name: "taskmanager", Replicas: 4}},
+				}},
+			},
+			strategy: &policyv1alpha1.ReplicaSchedulingStrategy{ReplicaSchedulingType: policyv1alpha1.ReplicaSchedulingTypeDuplicated},
+			expected: true,
+		},
+		{
+			name: "single component without component results uses duplicated replica checks",
+			bindingSpec: &workv1alpha2.ResourceBindingSpec{
+				Replicas:   3,
+				Components: []workv1alpha2.Component{{Name: "deployment", Replicas: 3}},
+				Clusters:   []workv1alpha2.TargetCluster{{Name: ClusterMember1, Replicas: 2}},
+			},
+			strategy: &policyv1alpha1.ReplicaSchedulingStrategy{ReplicaSchedulingType: policyv1alpha1.ReplicaSchedulingTypeDuplicated},
+			expected: true,
+		},
+		{
+			name: "single component without component results uses divided replica checks",
+			bindingSpec: &workv1alpha2.ResourceBindingSpec{
+				Replicas:   6,
+				Components: []workv1alpha2.Component{{Name: "deployment", Replicas: 6}},
+				Clusters:   []workv1alpha2.TargetCluster{{Name: ClusterMember1, Replicas: 2}, {Name: ClusterMember2, Replicas: 3}},
+			},
+			strategy: &policyv1alpha1.ReplicaSchedulingStrategy{ReplicaSchedulingType: policyv1alpha1.ReplicaSchedulingTypeDivided},
+			expected: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -251,6 +433,109 @@ func TestIsBindingReplicasChanged(t *testing.T) {
 			got := IsBindingReplicasChanged(tt.bindingSpec, tt.strategy)
 			if got != tt.expected {
 				t.Errorf("IsBindingReplicasChanged() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func Test_isComponentReplicasChanged(t *testing.T) {
+	components := []workv1alpha2.Component{{Name: "jobmanager", Replicas: 1}, {Name: "taskmanager", Replicas: 4}}
+	recorded := []workv1alpha2.TargetComponent{{Name: "jobmanager", Replicas: 1}, {Name: "taskmanager", Replicas: 4}}
+	reordered := []workv1alpha2.TargetComponent{{Name: "taskmanager", Replicas: 4}, {Name: "jobmanager", Replicas: 1}}
+	changed := []workv1alpha2.TargetComponent{{Name: "jobmanager", Replicas: 1}, {Name: "taskmanager", Replicas: 6}}
+
+	tests := []struct {
+		name       string
+		components []workv1alpha2.Component
+		clusters   []workv1alpha2.TargetCluster
+		want       bool
+	}{
+		{
+			name:       "equal component results ignore order",
+			components: components,
+			clusters:   []workv1alpha2.TargetCluster{{Name: ClusterMember1, Components: reordered}},
+		},
+		{
+			name:       "scale up",
+			components: []workv1alpha2.Component{{Name: "jobmanager", Replicas: 1}, {Name: "taskmanager", Replicas: 6}},
+			clusters:   []workv1alpha2.TargetCluster{{Name: ClusterMember1, Components: recorded}},
+			want:       true,
+		},
+		{
+			name:       "scale down",
+			components: []workv1alpha2.Component{{Name: "jobmanager", Replicas: 1}, {Name: "taskmanager", Replicas: 2}},
+			clusters:   []workv1alpha2.TargetCluster{{Name: ClusterMember1, Components: recorded}},
+			want:       true,
+		},
+		{
+			name:       "mixed scale",
+			components: []workv1alpha2.Component{{Name: "jobmanager", Replicas: 2}, {Name: "taskmanager", Replicas: 2}},
+			clusters:   []workv1alpha2.TargetCluster{{Name: ClusterMember1, Components: recorded}},
+			want:       true,
+		},
+		{
+			name:       "component added",
+			components: []workv1alpha2.Component{{Name: "jobmanager", Replicas: 1}, {Name: "taskmanager", Replicas: 4}, {Name: "sidecar", Replicas: 1}},
+			clusters:   []workv1alpha2.TargetCluster{{Name: ClusterMember1, Components: recorded}},
+			want:       true,
+		},
+		{
+			name:       "component removed",
+			components: []workv1alpha2.Component{{Name: "jobmanager", Replicas: 1}},
+			clusters:   []workv1alpha2.TargetCluster{{Name: ClusterMember1, Components: recorded}},
+			want:       true,
+		},
+		{
+			name:       "component renamed without replica changes",
+			components: []workv1alpha2.Component{{Name: "jobmanager", Replicas: 1}, {Name: "worker", Replicas: 4}},
+			clusters:   []workv1alpha2.TargetCluster{{Name: ClusterMember1, Components: recorded}},
+			want:       true,
+		},
+		{
+			name:       "unknown component with zero replicas",
+			components: []workv1alpha2.Component{{Name: "jobmanager", Replicas: 1}, {Name: "worker", Replicas: 0}},
+			clusters: []workv1alpha2.TargetCluster{{Name: ClusterMember1, Components: []workv1alpha2.TargetComponent{
+				{Name: "jobmanager", Replicas: 1}, {Name: "taskmanager", Replicas: 0},
+			}}},
+			want: true,
+		},
+		{
+			name:       "all target clusters unchanged",
+			components: components,
+			clusters:   []workv1alpha2.TargetCluster{{Name: ClusterMember1, Components: recorded}, {Name: ClusterMember2, Components: reordered}},
+		},
+		{
+			name:       "later target cluster differs",
+			components: components,
+			clusters:   []workv1alpha2.TargetCluster{{Name: ClusterMember1, Components: recorded}, {Name: ClusterMember2, Components: changed}},
+			want:       true,
+		},
+		{
+			name:       "missing results do not hide a later change",
+			components: components,
+			clusters:   []workv1alpha2.TargetCluster{{Name: ClusterMember1}, {Name: ClusterMember2, Components: changed}},
+			want:       true,
+		},
+		{
+			name:       "missing results followed by equal results",
+			components: components,
+			clusters:   []workv1alpha2.TargetCluster{{Name: ClusterMember1}, {Name: ClusterMember2, Components: recorded}},
+		},
+		{
+			name:       "all target clusters lack component results",
+			components: components,
+			clusters:   []workv1alpha2.TargetCluster{{Name: ClusterMember1}, {Name: ClusterMember2, Components: []workv1alpha2.TargetComponent{}}},
+		},
+		{
+			name:       "no target clusters",
+			components: components,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isComponentReplicasChanged(tt.components, tt.clusters); got != tt.want {
+				t.Fatalf("isComponentReplicasChanged() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -501,31 +786,31 @@ func TestMergePolicySuspension(t *testing.T) {
 		{
 			name: "binding suspension only preserves scheduling when policy suspension nil",
 			bindingSuspension: &workv1alpha2.Suspension{
-				Scheduling: ptr.To(true),
+				Scheduling: new(true),
 			},
 			policySuspension: nil,
 			want: &workv1alpha2.Suspension{
-				Scheduling: ptr.To(true),
+				Scheduling: new(true),
 			},
 		},
 		{
 			name: "cleanup of binding suspension preserves scheduling field",
 			bindingSuspension: &workv1alpha2.Suspension{
 				Suspension: policyv1alpha1.Suspension{
-					Dispatching: ptr.To(true),
+					Dispatching: new(true),
 				},
-				Scheduling: ptr.To(true),
+				Scheduling: new(true),
 			},
 			policySuspension: nil,
 			want: &workv1alpha2.Suspension{
-				Scheduling: ptr.To(true),
+				Scheduling: new(true),
 			},
 		},
 		{
 			name: "if the scheduling not set and policy suspension nil, will return nil",
 			bindingSuspension: &workv1alpha2.Suspension{
 				Suspension: policyv1alpha1.Suspension{
-					Dispatching: ptr.To(true),
+					Dispatching: new(true),
 				},
 			},
 			policySuspension: nil,
@@ -535,27 +820,27 @@ func TestMergePolicySuspension(t *testing.T) {
 			name:              "policy suspension set and no existing binding creates new suspension from policy",
 			bindingSuspension: nil,
 			policySuspension: &policyv1alpha1.Suspension{
-				Dispatching: ptr.To(true),
+				Dispatching: new(true),
 			},
 			want: &workv1alpha2.Suspension{
 				Suspension: policyv1alpha1.Suspension{
-					Dispatching: ptr.To(true),
+					Dispatching: new(true),
 				},
 			},
 		},
 		{
 			name: "should merge policy suspension and binding suspension",
 			bindingSuspension: &workv1alpha2.Suspension{
-				Scheduling: ptr.To(true),
+				Scheduling: new(true),
 			},
 			policySuspension: &policyv1alpha1.Suspension{
-				Dispatching: ptr.To(true),
+				Dispatching: new(true),
 			},
 			want: &workv1alpha2.Suspension{
 				Suspension: policyv1alpha1.Suspension{
-					Dispatching: ptr.To(true),
+					Dispatching: new(true),
 				},
-				Scheduling: ptr.To(true),
+				Scheduling: new(true),
 			},
 		},
 	}

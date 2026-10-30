@@ -62,9 +62,13 @@ spec:
             {{- if .Values.scheduler.enableSchedulerEstimator }}
             - --enable-scheduler-estimator=true
             {{- end }}
+            {{- if .Values.scheduler.enableEmptyWorkloadPropagation }}
+            - --enable-empty-workload-propagation=true
+            {{- end }}
             {{- with (include "karmada.scheduler.featureGates" .) }}
             - {{ . }}
             {{- end }}
+            {{- include "karmada.scheduler.extraCommandArgs" . | nindent 12 }}
           livenessProbe:
             httpGet:
               path: /healthz

@@ -2286,6 +2286,9 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: com.github.karmada-io.karmada.pkg.apis.work.v1alpha2.SchedulePriority
   map:
     fields:
+    - name: preemptionPolicy
+      type:
+        scalar: string
     - name: priority
       type:
         scalar: numeric
@@ -2304,6 +2307,12 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: com.github.karmada-io.karmada.pkg.apis.work.v1alpha2.TargetCluster
   map:
     fields:
+    - name: components
+      type:
+        list:
+          elementType:
+            namedType: com.github.karmada-io.karmada.pkg.apis.work.v1alpha2.TargetComponent
+          elementRelationship: atomic
     - name: name
       type:
         scalar: string
@@ -2311,6 +2320,17 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: replicas
       type:
         scalar: numeric
+- name: com.github.karmada-io.karmada.pkg.apis.work.v1alpha2.TargetComponent
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: replicas
+      type:
+        scalar: numeric
+      default: 0
 - name: com.github.karmada-io.karmada.pkg.apis.work.v1alpha2.WorkloadAffinityGroups
   map:
     fields:
@@ -2466,6 +2486,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: message
       type:
         scalar: string
+    - name: observedGeneration
+      type:
+        scalar: numeric
     - name: reason
       type:
         scalar: string

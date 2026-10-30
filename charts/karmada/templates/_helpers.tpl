@@ -357,6 +357,17 @@ app: {{- include "karmada.name" .}}-search
     secretName: {{ $name }}-cert
 {{- end -}}
 
+{{- define "karmada.schedulerEstimator.cert.volume" -}}
+{{ $name :=  include "karmada.name" . }}
+- name: karmada-certs
+  secret:
+  {{- if eq .Values.installMode "host" }}
+    secretName: {{ $name }}-cert
+  {{- else }}
+    secretName: {{ .Values.schedulerEstimator.certs }}
+  {{- end }}
+{{- end -}}
+
 {{/*
 Common env for POD_IP
 */}}
@@ -644,6 +655,79 @@ If none are set, outputs nothing.
 {{- end }}
 {{- end -}}
 
+{{- define "karmada.scheduler.extraCommandArgs" -}}
+{{- if .Values.scheduler.extraCommandArgs }}
+{{- range $key, $value := .Values.scheduler.extraCommandArgs }}
+- --{{ $key }}={{ $value }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{- define "karmada.descheduler.extraCommandArgs" -}}
+{{- if .Values.descheduler.extraCommandArgs }}
+{{- range $key, $value := .Values.descheduler.extraCommandArgs }}
+- --{{ $key }}={{ $value }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{- define "karmada.schedulerEstimator.extraCommandArgs" -}}
+{{- if .Values.schedulerEstimator.extraCommandArgs }}
+{{- range $key, $value := .Values.schedulerEstimator.extraCommandArgs }}
+- --{{ $key }}={{ $value }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{- define "karmada.webhook.extraCommandArgs" -}}
+{{- if .Values.webhook.extraCommandArgs }}
+{{- range $key, $value := .Values.webhook.extraCommandArgs }}
+- --{{ $key }}={{ $value }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{- define "karmada.agent.extraCommandArgs" -}}
+{{- if .Values.agent.extraCommandArgs }}
+{{- range $key, $value := .Values.agent.extraCommandArgs }}
+- --{{ $key }}={{ $value }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{- define "karmada.aggregatedApiServer.extraCommandArgs" -}}
+{{- if .Values.aggregatedApiServer.extraCommandArgs }}
+{{- range $key, $value := .Values.aggregatedApiServer.extraCommandArgs }}
+- --{{ $key }}={{ $value }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{- define "karmada.apiServer.extraCommandArgs" -}}
+{{- if .Values.apiServer.extraCommandArgs }}
+{{- range $key, $value := .Values.apiServer.extraCommandArgs }}
+- --{{ $key }}={{ $value }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{- define "karmada.metricsAdapter.extraCommandArgs" -}}
+{{- if .Values.metricsAdapter.extraCommandArgs }}
+{{- range $key, $value := .Values.metricsAdapter.extraCommandArgs }}
+- --{{ $key }}={{ $value }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{- define "karmada.search.extraCommandArgs" -}}
+{{- if .Values.search.extraCommandArgs }}
+{{- range $key, $value := .Values.search.extraCommandArgs }}
+- --{{ $key }}={{ $value }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+
 {{- define "karmada.initContainer.waitEtcd" -}}
 - name: wait
   image: {{ include "karmada.cfssl.image" . }}
@@ -694,4 +778,20 @@ If none are set, outputs nothing.
       EOF
   volumeMounts:
     {{- include "karmada.kubeconfig.volumeMount" .| nindent 4 }}
+{{- end -}}
+
+{{/*
+Build the certificate hosts list with systemNamespace SANs.
+When deploying to a namespace other than systemNamespace, the certificate
+must also cover *.{systemNamespace}.svc so that karmada-apiserver can verify
+the aggregated-apiserver's TLS cert when accessing APIService backends.
+See: https://github.com/karmada-io/karmada/blob/f2b734140bd0ba5fa399ffa1d08a3b31ce78c099/operator/pkg/certs/certs.go#L490-L506 for the equivalent logic.
+*/}}
+{{- define "karmada.certHosts" -}}
+  {{- $hosts := .Values.certs.auto.hosts -}}
+  {{- if ne .Values.systemNamespace .Release.Namespace -}}
+    {{- $hosts = append $hosts (printf "*.%s.svc.%s" .Values.systemNamespace .Values.clusterDomain) -}}
+    {{- $hosts = append $hosts (printf "*.%s.svc" .Values.systemNamespace) -}}
+  {{- end -}}
+  {{- tpl (toJson $hosts) . -}}
 {{- end -}}

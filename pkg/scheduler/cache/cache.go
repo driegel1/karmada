@@ -202,7 +202,6 @@ func (b *AssigningResourceBindingCache) OnBindingDelete(binding *workv1alpha2.Re
 
 	key := names.NamespacedKey(binding.Namespace, binding.Name)
 	delete(b.items, key)
-	delete(b.assumptions, key)
 }
 
 // Add records a ResourceBinding that has a new scheduling decision committed to the API server.
@@ -227,7 +226,7 @@ func (b *AssigningResourceBindingCache) GetBindings() map[string]*workv1alpha2.R
 // Assume records (or replaces) the resource footprint for the given binding+cluster pair.
 // Calling Assume again for the same pair overwrites the previous entry and resets the TTL,
 // reflecting the latest scheduling decision.
-// entry.Components is deep-copied before storage to prevent callers from unintentionally
+// entry.Components are deep-copied before storage to prevent callers from unintentionally
 // mutating the cache's internal state via shared slice backing arrays.
 func (b *AssigningResourceBindingCache) Assume(bindingKey, clusterName string, entry AssumedWorkload) {
 	b.Lock()
@@ -301,6 +300,15 @@ func (b *AssigningResourceBindingCache) GetAssumedWorkloads(clusterName string) 
 		}
 	}
 	return result
+}
+
+// IsAssumptionExist checks if there is an existing assumption for the given binding key.
+func (b *AssigningResourceBindingCache) IsAssumptionExist(bindingKey string) bool {
+	b.RLock()
+	defer b.RUnlock()
+
+	_, ok := b.assumptions[bindingKey]
+	return ok
 }
 
 // GC removes all assumptions whose TTL has expired.

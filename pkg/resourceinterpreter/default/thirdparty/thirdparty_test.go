@@ -144,7 +144,7 @@ func getAllTestCases(t *testing.T, testDataDir string) TestStructure {
 			return nil
 		}
 
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G122 -- path comes from walking a fixed testdata directory in a unit test, not external input.
 		if err != nil {
 			t.Fatal(fmt.Errorf("failed to read file %s: %v", path, err))
 		}
@@ -270,9 +270,7 @@ func deepEqual(expected, actualValue any) (bool, error) {
 		if err := k8sjson.Unmarshal(expectedJSONBytes, &unmarshaledExpected); err != nil {
 			return false, fmt.Errorf("failed to unmarshal expected JSON into []Component: %w", err)
 		}
-		// Sort both slices before comparison to handle non-deterministic order from Lua pairs()
-		sortComponents(unmarshaledExpected)
-		sortComponents(typedActual)
+		// Compare in order, because component order must be deterministic.
 		return checker.DeepEqual(unmarshaledExpected, typedActual), nil
 
 	case *unstructured.Unstructured:
@@ -315,13 +313,6 @@ func sortDependencies(deps []configv1alpha1.DependentObjectReference) {
 	})
 }
 
-// sortComponents sorts a slice of Component by name.
-func sortComponents(components []workv1alpha2.Component) {
-	sort.Slice(components, func(i, j int) bool {
-		return components[i].Name < components[j].Name
-	})
-}
-
 func TestThirdPartyCustomizationsFile(t *testing.T) {
 	err := filepath.Walk("resourcecustomizations", func(path string, f os.FileInfo, err error) error {
 		if err != nil {
@@ -338,7 +329,7 @@ func TestThirdPartyCustomizationsFile(t *testing.T) {
 			return nil
 		}
 
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G122 -- path comes from walking a fixed testdata directory in a unit test, not external input.
 		if err != nil {
 			// cannot happen
 			return err

@@ -139,6 +139,10 @@ certs:
     ## @param certs.auto.rootCAExpiryDays expiry of the root CA certificate in days, defaults to 3650 days (10 years)
     rootCAExpiryDays: 3650
     ## @param certs.auto.hosts hosts of the certificate
+    ## Note: When the release namespace differs from systemNamespace, SANs for
+    ## systemNamespace are automatically added by the karmada.certHosts helper, including:
+    ## - "*.{{ .Values.systemNamespace }}.svc.{{ .Values.clusterDomain }}"
+    ## - "*.{{ .Values.systemNamespace }}.svc"
     hosts: [
       "kubernetes.default.svc",
       "*.etcd.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}",
@@ -247,8 +251,15 @@ scheduler:
   priorityClassName: "system-node-critical"
   ## @param scheduler.enableSchedulerEstimator enable scheduler estimator
   enableSchedulerEstimator: false
+  ## @param scheduler.enableEmptyWorkloadPropagation enable propagation of zero-replica workloads
+  enableEmptyWorkloadPropagation: false
   ## @param scheduler.featureGates A set of key=value pairs that describe feature gates for karmada-scheduler
   featureGates: {}
+  ## @param scheduler.extraCommandArgs A set of key=value pairs that describe extra command line arguments for the scheduler.
+  ## They are rendered as --key=value after built-in and dedicated flags.
+  ## Duplicate single-value flags will override earlier values (last value wins).
+  ## Multi-value flags (like --feature-gates or --controllers) may not behave as simple overrides.
+  extraCommandArgs: {}
 
 ## webhook config
 webhook:
@@ -311,6 +322,14 @@ webhook:
   priorityClassName: "system-node-critical"
   ## @param webhook.featureGates A set of key=value pairs that describe feature gates for karmada-webhook
   featureGates: {}
+  ## To allow NoExecute taints in a ClusterTaintPolicy, set:
+  ##   extraCommandArgs:
+  ##     allow-no-execute-taint-policy: true
+  ## @param webhook.extraCommandArgs A set of key=value pairs that describe extra command line arguments for the webhook.
+  ## They are rendered as --key=value after built-in and dedicated flags.
+  ## Duplicate single-value flags will override earlier values (last value wins).
+  ## Multi-value flags (like --feature-gates or --controllers) may not behave as simple overrides.
+  extraCommandArgs: {}
 
 ## controller manager config
 controllerManager:
@@ -403,7 +422,7 @@ apiServer:
   image:
     registry: registry.k8s.io
     repository: kube-apiserver
-    tag: "v1.35.2"
+    tag: "v1.36.2"
     ## Specify a imagePullPolicy, defaults to 'IfNotPresent'
     pullPolicy: IfNotPresent
     ## Optionally specify an array of imagePullSecrets.
@@ -493,6 +512,11 @@ apiServer:
       key: "encryption-config.yaml"
     ## @param apiServer.encryptionAtRest.configFile path where the encryption config file will be mounted in the container
     configFile: "/etc/karmada/encryption/encryption-config.yaml"
+  ## @param apiServer.extraCommandArgs A set of key=value pairs that describe extra command line arguments for the apiServer.
+  ## They are rendered as --key=value after built-in and dedicated flags.
+  ## Duplicate single-value flags will override earlier values (last value wins).
+  ## Multi-value flags (like --feature-gates or --controllers) may not behave as simple overrides.
+  extraCommandArgs: {}
 
 ## karmada aggregated apiserver config
 aggregatedApiServer:
@@ -555,6 +579,11 @@ aggregatedApiServer:
   podDisruptionBudget: *podDisruptionBudget
   ## @param aggregatedApiServer.priorityClassName the priority class name for the karmada-aggregated-apiserver.
   priorityClassName: "system-node-critical"
+  ## @param aggregatedApiServer.extraCommandArgs A set of key=value pairs that describe extra command line arguments for the aggregatedApiServer.
+  ## They are rendered as --key=value after built-in and dedicated flags.
+  ## Duplicate single-value flags will override earlier values (last value wins).
+  ## Multi-value flags (like --feature-gates or --controllers) may not behave as simple overrides.
+  extraCommandArgs: {}
 
 ## karmada metrics adapter config
 metricsAdapter:
@@ -617,6 +646,11 @@ metricsAdapter:
   podDisruptionBudget: *podDisruptionBudget
   ## @param metricsAadpter.priorityClassName the priority class name for the karmada-mertics-adapter
   priorityClassName: "system-node-critical"
+  ## @param metricsAdapter.extraCommandArgs A set of key=value pairs that describe extra command line arguments for the metricsAdapter.
+  ## They are rendered as --key=value after built-in and dedicated flags.
+  ## Duplicate single-value flags will override earlier values (last value wins).
+  ## Multi-value flags (like --feature-gates or --controllers) may not behave as simple overrides.
+  extraCommandArgs: {}
 
 ## kubernetes controller manager config
 kubeControllerManager:
@@ -640,7 +674,7 @@ kubeControllerManager:
   image:
     registry: registry.k8s.io
     repository: kube-controller-manager
-    tag: "v1.35.2"
+    tag: "v1.36.2"
     ## Specify a imagePullPolicy, defaults to 'IfNotPresent'
     pullPolicy: IfNotPresent
     ## Optionally specify an array of imagePullSecrets.
@@ -740,7 +774,7 @@ etcd:
     image:
       registry: registry.k8s.io
       repository: etcd
-      tag: "3.6.6-0"
+      tag: "3.6.8-0"
       ## Specify a imagePullPolicy, defaults to 'IfNotPresent'
       pullPolicy: IfNotPresent
     ## @param etcd.internal.storageType storage type for etcd data
@@ -853,6 +887,11 @@ agent:
   podDisruptionBudget: *podDisruptionBudget
   ## @param agent.priorityClassName the priority class name for the karmada-agent
   priorityClassName: "system-node-critical"
+  ## @param agent.extraCommandArgs A set of key=value pairs that describe extra command line arguments for the agent.
+  ## They are rendered as --key=value after built-in and dedicated flags.
+  ## Duplicate single-value flags will override earlier values (last value wins).
+  ## Multi-value flags (like --feature-gates or --controllers) may not behave as simple overrides.
+  extraCommandArgs: {}
 
 ## karmada scheduler estimator
 schedulerEstimator:
@@ -939,6 +978,13 @@ schedulerEstimator:
   featureGates: {}
   ## @param schedulerEstimator.priorityClassName the priority class name for the scheduler-estimator
   priorityClassName: "system-node-critical"
+  ## @param schedulerEstimator.certs certs of the scheduler-estimator, only used when installMode is not "host"
+  certs: karmada-cert
+  ## @param schedulerEstimator.extraCommandArgs A set of key=value pairs that describe extra command line arguments for the schedulerEstimator.
+  ## They are rendered as --key=value after built-in and dedicated flags.
+  ## Duplicate single-value flags will override earlier values (last value wins).
+  ## Multi-value flags (like --feature-gates or --controllers) may not behave as simple overrides.
+  extraCommandArgs: {}
 
 ## descheduler config
 descheduler:
@@ -1001,6 +1047,11 @@ descheduler:
   podDisruptionBudget: *podDisruptionBudget
   ## @param descheduler.priorityClassName the priority class name for the descheduler
   priorityClassName: "system-node-critical"
+  ## @param descheduler.extraCommandArgs A set of key=value pairs that describe extra command line arguments for the descheduler.
+  ## They are rendered as --key=value after built-in and dedicated flags.
+  ## Duplicate single-value flags will override earlier values (last value wins).
+  ## Multi-value flags (like --feature-gates or --controllers) may not behave as simple overrides.
+  extraCommandArgs: {}
 
 ## karmada-search config
 search:
@@ -1065,3 +1116,8 @@ search:
   podDisruptionBudget: *podDisruptionBudget
   ## @param search.priorityClassName the priority class name for the karmada-search
   priorityClassName: "system-node-critical"
+  ## @param search.extraCommandArgs A set of key=value pairs that describe extra command line arguments for the search.
+  ## They are rendered as --key=value after built-in and dedicated flags.
+  ## Duplicate single-value flags will override earlier values (last value wins).
+  ## Multi-value flags (like --feature-gates or --controllers) may not behave as simple overrides.
+  extraCommandArgs: {}

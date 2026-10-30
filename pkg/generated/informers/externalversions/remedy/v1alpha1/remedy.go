@@ -28,16 +28,45 @@ import (
 	remedyv1alpha1 "github.com/karmada-io/karmada/pkg/generated/listers/remedy/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
 )
 
 // RemedyInformer provides access to a shared informer and lister for
-// Remedies.
+// Remedies. Prefer using the type-safe variant (see [TypedRemedyInformer]).
 type RemedyInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() remedyv1alpha1.RemedyLister
 }
+
+// TypedRemedyInformer provides access to a shared informer and lister for
+// Remedies, including the type-safe TypedInformer variant.
+// It is a superset of RemedyInformer.
+type TypedRemedyInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() RemedyIndexInformer
+	Lister() remedyv1alpha1.RemedyLister
+}
+
+// RemedyIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type RemedyIndexInformer cache.TypedSharedIndexInformer[*apisremedyv1alpha1.Remedy]
+
+// RemedyHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for Remedy.
+type RemedyHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisremedyv1alpha1.Remedy]
+
+// RemedyDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for Remedy.
+type RemedyDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisremedyv1alpha1.Remedy]
+
+// RemedyFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for Remedy.
+type RemedyFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisremedyv1alpha1.Remedy]
+
+// RemedyIndexers is a specialization of [cache.TypedIndexers] for Remedy.
+type RemedyIndexers = cache.TypedIndexers[*apisremedyv1alpha1.Remedy]
+
+// DeletedRemedy is a specialization of [cache.DeletedObject] for Remedy.
+type DeletedRemedy = cache.DeletedObject[*apisremedyv1alpha1.Remedy]
 
 type remedyInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -47,55 +76,132 @@ type remedyInformer struct {
 // NewRemedyInformer constructs a new informer for Remedy type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedRemedyInformer]).
 func NewRemedyInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredRemedyInformer(client, resyncPeriod, indexers, nil)
+	return NewRemedyInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedRemedyInformer constructs a new informer for Remedy type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedRemedyInformer(client versioned.Interface, resyncPeriod time.Duration, indexers RemedyIndexers) RemedyIndexInformer {
+	return NewTypedRemedyInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredRemedyInformer constructs a new informer for Remedy type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredRemedyInformer]).
 func NewFilteredRemedyInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return cache.NewSharedIndexInformer(
+	return NewTypedRemedyInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredRemedyInformer constructs a new informer for Remedy type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredRemedyInformer(client versioned.Interface, resyncPeriod time.Duration, indexers RemedyIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) RemedyIndexInformer {
+	return NewTypedRemedyInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
+}
+
+// NewRemedyInformerWithOptions constructs a new informer for Remedy type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedRemedyInformerWithOptions]).
+func NewRemedyInformerWithOptions(client versioned.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedRemedyInformerWithOptions(client, options)
+}
+
+// NewTypedRemedyInformerWithOptions constructs a new informer for Remedy type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedRemedyInformerWithOptions(client versioned.Interface, options internalinterfaces.InformerOptions) RemedyIndexInformer {
+	gvr := schema.GroupVersionResource{Group: "remedy.karmada.io", Version: "v1alpha1", Resource: "remedys"}
+	identifier := options.InformerName.WithResource(gvr)
+	tweakListOptions := options.TweakListOptions
+	return cache.NewTypedSharedIndexInformer[*apisremedyv1alpha1.Remedy](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
-			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
+			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.RemedyV1alpha1().Remedies().List(context.Background(), options)
+				return client.RemedyV1alpha1().Remedies().List(context.Background(), opts)
 			},
-			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
+			WatchFunc: func(opts v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.RemedyV1alpha1().Remedies().Watch(context.Background(), options)
+				return client.RemedyV1alpha1().Remedies().Watch(context.Background(), opts)
 			},
-			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+			ListWithContextFunc: func(ctx context.Context, opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.RemedyV1alpha1().Remedies().List(ctx, options)
+				return client.RemedyV1alpha1().Remedies().List(ctx, opts)
 			},
-			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+			WatchFuncWithContext: func(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.RemedyV1alpha1().Remedies().Watch(ctx, options)
+				return client.RemedyV1alpha1().Remedies().Watch(ctx, opts)
 			},
 		}, client),
 		&apisremedyv1alpha1.Remedy{},
-		resyncPeriod,
-		indexers,
-	)
+		cache.SharedIndexInformerOptions{
+			ResyncPeriod: options.ResyncPeriod,
+			Indexers:     options.Indexers,
+			Identifier:   identifier,
+		},
+	))
 }
 
 func (f *remedyInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredRemedyInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	return NewTypedRemedyInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *remedyInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisremedyv1alpha1.Remedy{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *remedyInformer) TypedInformer() RemedyIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisremedyv1alpha1.Remedy](f.factory.InformerFor(&apisremedyv1alpha1.Remedy{}, f.defaultInformer))
 }
 
 func (f *remedyInformer) Lister() remedyv1alpha1.RemedyLister {
 	return remedyv1alpha1.NewRemedyLister(f.Informer().GetIndexer())
+}
+
+// ToTypedRemedyInformer converts an untyped informer into a TypedRemedyInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *Remedy. If that is not the case, calling type-safe methods of the returned
+// TypedRemedyInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedRemedyInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedRemedyInformer(informer RemedyInformer) TypedRemedyInformer {
+	if informer, ok := informer.(TypedRemedyInformer); ok {
+		return informer
+	}
+	return &remedyTypedInformerAdapter{informer}
+}
+
+type remedyTypedInformerAdapter struct {
+	RemedyInformer
+}
+
+func (a *remedyTypedInformerAdapter) TypedInformer() RemedyIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisremedyv1alpha1.Remedy](a.Informer())
+}
+
+// ToRemedyIndexInformer converts an untyped informer into a RemedyIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *Remedy. If that is not the case, calling type-safe methods of the returned
+// RemedyIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a RemedyIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToRemedyIndexInformer(informer cache.SharedIndexInformer) RemedyIndexInformer {
+	if informer, ok := informer.(RemedyIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisremedyv1alpha1.Remedy](informer)
 }

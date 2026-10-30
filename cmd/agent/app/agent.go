@@ -35,7 +35,6 @@ import (
 	logsv1 "k8s.io/component-base/logs/api/v1"
 	"k8s.io/component-base/term"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/ptr"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/config"
@@ -102,9 +101,9 @@ cluster and manifests to the Karmada control plane.`,
 			logs.InitLogs()
 			return nil
 		},
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			// validate options
-			if errs := opts.Validate(); len(errs) != 0 {
+			if errs := opts.Validate(cmd.Flags()); len(errs) != 0 {
 				return errs.ToAggregate()
 			}
 			if err := run(ctx, opts); err != nil {
@@ -160,46 +159,54 @@ func run(ctx context.Context, opts *options.Options) error {
 	if err != nil {
 		return fmt.Errorf("error building kubeconfig of member cluster: %w", err)
 	}
-	clusterKubeClient := kubeclientset.NewForConfigOrDie(clusterConfig)
-	controlPlaneKubeClient := kubeclientset.NewForConfigOrDie(controlPlaneRestConfig)
-	karmadaClient := karmadaclientset.NewForConfigOrDie(controlPlaneRestConfig)
+	if opts.EnableClusterRegistration {
+		memberKubeClient := kubeclientset.NewForConfigOrDie(clusterConfig)
+		controlPlaneKubeClient := kubeclientset.NewForConfigOrDie(controlPlaneRestConfig)
+		karmadaClient := karmadaclientset.NewForConfigOrDie(controlPlaneRestConfig)
 
-	registerOption := util.ClusterRegisterOption{
-		ClusterNamespace:   opts.ClusterNamespace,
-		ClusterName:        opts.ClusterName,
-		ReportSecrets:      opts.ReportSecrets,
-		ClusterAPIEndpoint: opts.ClusterAPIEndpoint,
-		ProxyServerAddress: opts.ProxyServerAddress,
-		ClusterProvider:    opts.ClusterProvider,
-		ClusterRegion:      opts.ClusterRegion,
-		ClusterZones:       opts.ClusterZones,
-		DryRun:             false,
-		ControlPlaneConfig: controlPlaneRestConfig,
-		ClusterConfig:      clusterConfig,
-	}
+		registerOption := util.ClusterRegisterOption{
+			ClusterNamespace:   opts.ClusterNamespace,
+			ClusterName:        opts.ClusterName,
+			ReportSecrets:      opts.ReportSecrets,
+			ClusterAPIEndpoint: opts.ClusterAPIEndpoint,
+			ProxyServerAddress: opts.ProxyServerAddress,
+			ClusterProvider:    opts.ClusterProvider,
+			ClusterRegion:      opts.ClusterRegion,
+			ClusterZones:       opts.ClusterZones,
+			DryRun:             false,
+			ControlPlaneConfig: controlPlaneRestConfig,
+			ClusterConfig:      clusterConfig,
+		}
 
-	registerOption.ClusterID, err = util.ObtainClusterID(clusterKubeClient)
-	if err != nil {
-		return err
-	}
+		registerOption.ClusterID, err = util.ObtainClusterID(memberKubeClient)
+		if err != nil {
+			return err
+		}
 
-	if err = registerOption.Validate(karmadaClient, true); err != nil {
-		return err
-	}
+		if err = registerOption.Validate(karmadaClient, true); err != nil {
+			return err
+		}
 
-	clusterSecret, impersonatorSecret, err := util.ObtainCredentialsFromMemberCluster(clusterKubeClient, registerOption)
-	if err != nil {
-		return err
-	}
-	if clusterSecret != nil {
-		registerOption.Secret = *clusterSecret
-	}
-	if impersonatorSecret != nil {
-		registerOption.ImpersonatorSecret = *impersonatorSecret
-	}
-	err = util.RegisterClusterInControllerPlane(registerOption, controlPlaneKubeClient, generateClusterInControllerPlane)
-	if err != nil {
-		return fmt.Errorf("failed to register with karmada control plane: %w", err)
+		clusterSecret, impersonatorSecret, err := util.ObtainCredentialsFromMemberCluster(memberKubeClient, registerOption)
+		if err != nil {
+			return err
+		}
+		if clusterSecret != nil {
+			registerOption.Secret = *clusterSecret
+		}
+		if impersonatorSecret != nil {
+			registerOption.ImpersonatorSecret = *impersonatorSecret
+		}
+		if err = util.RegisterClusterInControllerPlane(registerOption, controlPlaneKubeClient, generateClusterInControllerPlane); err != nil {
+			return fmt.Errorf("failed to register with karmada control plane: %w", err)
+		}
+	} else {
+		karmadaClient := karmadaclientset.NewForConfigOrDie(controlPlaneRestConfig)
+		controlPlaneKubeClient := kubeclientset.NewForConfigOrDie(controlPlaneRestConfig)
+		memberKubeClient := kubeclientset.NewForConfigOrDie(clusterConfig)
+		if err = validateExternallyRegisteredCluster(ctx, opts, karmadaClient, controlPlaneKubeClient, memberKubeClient); err != nil {
+			return err
+		}
 	}
 
 	executionSpace := names.GenerateExecutionSpaceName(opts.ClusterName)
@@ -227,7 +234,7 @@ func run(ctx context.Context, opts *options.Options) error {
 				schema.GroupKind{Group: clusterv1alpha1.GroupName, Kind: "Cluster"}.String(): opts.ConcurrentClusterSyncs,
 			},
 			CacheSyncTimeout: opts.ClusterCacheSyncTimeout.Duration,
-			UsePriorityQueue: ptr.To(features.FeatureGate.Enabled(features.ControllerPriorityQueue)),
+			UsePriorityQueue: new(features.FeatureGate.Enabled(features.ControllerPriorityQueue)),
 		},
 		NewCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
 			opts.DefaultTransform = fedinformer.StripUnusedFields
@@ -263,7 +270,7 @@ func run(ctx context.Context, opts *options.Options) error {
 func setupControllers(ctx context.Context, mgr controllerruntime.Manager, opts *options.Options) error {
 	restConfig := mgr.GetConfig()
 	dynamicClientSet := dynamic.NewForConfigOrDie(restConfig)
-	controlPlaneInformerManager := genericmanager.NewSingleClusterInformerManager(ctx, dynamicClientSet, 0)
+	controlPlaneInformerManager := genericmanager.NewSingleClusterInformerManager(ctx, dynamicClientSet, 0, fedinformer.StripUnusedFields)
 	controlPlaneKubeClientSet := kubeclientset.NewForConfigOrDie(restConfig)
 
 	// We need a service lister to build a resource interpreter with `ClusterIPServiceResolver`
@@ -280,7 +287,7 @@ func setupControllers(ctx context.Context, mgr controllerruntime.Manager, opts *
 	rateLimiterGetter := util.GetClusterRateLimiterGetter().SetDefaultLimits(opts.ClusterAPIQPS, opts.ClusterAPIBurst)
 	clusterClientOption := &util.ClientOption{RateLimiterGetter: rateLimiterGetter.GetRateLimiter}
 
-	objectWatcher := objectwatcher.NewObjectWatcher(mgr.GetClient(), mgr.GetRESTMapper(), util.NewClusterDynamicClientSetForAgent, clusterClientOption, resourceInterpreter)
+	objectWatcher := objectwatcher.NewObjectWatcher(mgr.GetClient(), mgr.GetRESTMapper(), util.NewClusterDynamicClientSetForAgent, clusterClientOption, resourceInterpreter, genericmanager.GetInstance())
 	controllerContext := controllerscontext.Context{
 		Mgr:           mgr,
 		ObjectWatcher: objectWatcher,
@@ -346,12 +353,14 @@ func startClusterStatusController(ctx controllerscontext.Context) (bool, error) 
 
 func startExecutionController(ctx controllerscontext.Context) (bool, error) {
 	executionController := &execution.Controller{
-		Client:             ctx.Mgr.GetClient(),
-		EventRecorder:      ctx.Mgr.GetEventRecorderFor(execution.ControllerName), //nolint:staticcheck // Note: GetEventRecorderFor is deprecated in controller-runtime v0.23.0 in favor of GetEventRecorder. This changes event API from v1 events to events.k8s.io. We need to migrate carefully, especially considering the impact on users and RBAC permission changes in installation/deployment tools.
-		RESTMapper:         ctx.Mgr.GetRESTMapper(),
-		ObjectWatcher:      ctx.ObjectWatcher,
-		InformerManager:    genericmanager.GetInstance(),
-		RateLimiterOptions: ctx.Opts.RateLimiterOptions,
+		Client:               ctx.Mgr.GetClient(),
+		EventRecorder:        ctx.Mgr.GetEventRecorderFor(execution.ControllerName), //nolint:staticcheck // Note: GetEventRecorderFor is deprecated in controller-runtime v0.23.0 in favor of GetEventRecorder. This changes event API from v1 events to events.k8s.io. We need to migrate carefully, especially considering the impact on users and RBAC permission changes in installation/deployment tools.
+		RESTMapper:           ctx.Mgr.GetRESTMapper(),
+		ObjectWatcher:        ctx.ObjectWatcher,
+		InformerManager:      genericmanager.GetInstance(),
+		RateLimiterOptions:   ctx.Opts.RateLimiterOptions,
+		ClusterClientSetFunc: util.NewClusterDynamicClientSetForAgent,
+		ClusterClientOption:  ctx.ClusterClientOption,
 	}
 	if err := executionController.SetupWithManager(ctx.Mgr); err != nil {
 		return false, err
@@ -366,9 +375,8 @@ func startWorkStatusController(ctx controllerscontext.Context) (bool, error) {
 		RESTMapper:                  ctx.Mgr.GetRESTMapper(),
 		InformerManager:             genericmanager.GetInstance(),
 		Context:                     ctx.Context,
-		ObjectWatcher:               ctx.ObjectWatcher,
 		ClusterDynamicClientSetFunc: util.NewClusterDynamicClientSetForAgent,
-		ClusterCacheSyncTimeout:     ctx.Opts.ClusterCacheSyncTimeout,
+		ClusterClientOption:         ctx.ClusterClientOption,
 		ConcurrentWorkStatusSyncs:   ctx.Opts.ConcurrentWorkSyncs,
 		RateLimiterOptions:          ctx.Opts.RateLimiterOptions,
 		ResourceInterpreter:         ctx.ResourceInterpreter,
@@ -390,6 +398,7 @@ func startServiceExportController(ctx controllerscontext.Context) (bool, error) 
 		WorkerNumber:                3,
 		PredicateFunc:               helper.NewPredicateForServiceExportControllerOnAgent(ctx.Opts.ClusterName),
 		ClusterDynamicClientSetFunc: util.NewClusterDynamicClientSetForAgent,
+		ClusterClientOption:         ctx.ClusterClientOption,
 		ClusterCacheSyncTimeout:     ctx.Opts.ClusterCacheSyncTimeout,
 		RateLimiterOptions:          ctx.Opts.RateLimiterOptions,
 	}

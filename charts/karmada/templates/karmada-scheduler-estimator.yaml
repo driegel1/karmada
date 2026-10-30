@@ -64,6 +64,7 @@ spec:
             {{- with (include "karmada.schedulerEstimator.featureGates" $) }}
             - {{ . }}
             {{- end }}
+            {{- include "karmada.schedulerEstimator.extraCommandArgs" $ | nindent 12 }}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -88,7 +89,7 @@ spec:
           {{- toYaml $.Values.schedulerEstimator.resources | nindent 12 }}
       priorityClassName: {{ $.Values.schedulerEstimator.priorityClassName }}
       volumes:
-      {{- include "karmada.scheduler.cert.volume" $ | nindent 8 }}
+      {{- include "karmada.schedulerEstimator.cert.volume" $ | nindent 8 }}
         - name: member-kubeconfig
           secret:
             secretName: {{ $clusterName }}-kubeconfig

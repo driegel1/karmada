@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.0
+    controller-gen.kubebuilder.io/version: v0.23.0
   name: multiclusteringresses.networking.karmada.io
 spec:
   group: networking.karmada.io
@@ -158,12 +158,8 @@ spec:
                         rule."
                       type: string
                     http:
-                      description: |-
-                        HTTPIngressRuleValue is a list of http selectors pointing to backends.
-                        In the example: http://<host>/<path>?<searchpart> -> backend where
-                        where parts of the url correspond to RFC 3986, this resource will be used
-                        to match against everything after the last '/' and before the first '?'
-                        or '#'.
+                      description: http is a HTTP IngressRuleValue, which contains
+                        a list of http selectors
                       properties:
                         paths:
                           description: paths is a collection of paths that map requests

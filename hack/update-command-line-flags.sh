@@ -13,8 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Regenerate component command-line flag reference Markdown:
-#   - docs/command-line-flags/   (karmada-controller-manager, karmada-scheduler, ...)
+# Regenerate command-line flag reference Markdown under docs/command-line-flags/
 #
 # Usage:
 #   hack/update-command-line-flags.sh
@@ -22,6 +21,11 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+
+# Pin the locale so the generated docs are identical regardless of the
+# developer's environment. kubectl's i18n package translates command
+# descriptions based on LC_ALL/LC_MESSAGES/LANG.
+export LC_ALL=C
 
 SCRIPT_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 # shellcheck source=hack/util.sh
@@ -34,3 +38,4 @@ mkdir -p "${COMPONENT_OUT}"
 
 cd "${SCRIPT_ROOT}"
 go run ./hack/tools/gencomponentdocs/ "${COMPONENT_OUT}" all
+go run ./hack/tools/genkarmadactldocs/ "${COMPONENT_OUT}"

@@ -26,6 +26,8 @@ Logs flags:
 
       --add-dir-header                       If true, adds the file directory to the header of the log messages
       --alsologtostderr                      log to standard error as well as files (no effect when -logtostderr=true)
+      --alsologtostderrthreshold severity    logs at or above this threshold go to stderr when -alsologtostderr=true (no effect when -logtostderr=true)
+      --legacy-stderr-threshold-behavior     If true, stderrthreshold is ignored when logtostderr=true (legacy behavior). If false, stderrthreshold is honored even when logtostderr=true (default true)
       --log-backtrace-at traceLocation       when logging hits line file:N, emit a stack trace (default :0)
       --log-dir string                       If non-empty, write log files in this directory (no effect when -logtostderr=true)
       --log-file string                      If non-empty, use this log file (no effect when -logtostderr=true)
@@ -38,7 +40,7 @@ Logs flags:
       --one-output                           If true, only write logs to their native severity level (vs also writing to each lower severity level; no effect when -logtostderr=true)
       --skip-headers                         If true, avoid header prefixes in the log messages
       --skip-log-headers                     If true, avoid headers when opening log files (no effect when -logtostderr=true)
-      --stderrthreshold severity             logs at or above this threshold go to stderr when writing to files and stderr (no effect when -logtostderr=true or -alsologtostderr=true) (default 2)
+      --stderrthreshold severity             logs at or above this threshold go to stderr when writing to files and stderr (no effect when -logtostderr=true or -alsologtostderr=true unless -legacy_stderr_threshold_behavior=false) (default 2)
   -v, --v Level                              number for the log level verbosity
       --vmodule pattern=N,...                comma-separated list of pattern=N settings for file-filtered logging (only works for text log format)
 
@@ -63,6 +65,7 @@ Generic flags:
       --concurrent-cluster-syncs int                   The number of Clusters that are allowed to sync concurrently. (default 5)
       --concurrent-work-syncs int                      The number of Works that are allowed to sync concurrently. (default 5)
       --controllers strings                            A list of controllers to enable. '*' enables all on-by-default controllers, 'foo' enables the controller named 'foo', '-foo' disables the controller named 'foo'. All controllers: certRotation, clusterStatus, endpointsliceCollect, execution, serviceExport, workStatus. (default [*])
+      --enable-cluster-registration                    Enable means the agent registers the member cluster with the Karmada control plane on startup, including creating the Cluster object and reporting credentials. Disable it when the cluster is registered by an external system; the Cluster object must already exist in Pull mode with spec.id set to the member cluster ID (the UID of its kube-system namespace), the karmada-cluster namespace must exist in the control plane, and the agent only validates them before starting controllers. Disabling it also makes the registration-related flags ineffective, so the agent refuses to start if any of them is set: --cluster-api-endpoint, --proxy-server-address, --cluster-provider, --cluster-region, --cluster-zones, --report-secrets, --cluster-namespace. (default true)
       --enable-cluster-resource-modeling               Enable means controller would build resource modeling for each cluster by syncing Nodes and Pods resources.
                                                        The resource modeling might be used by the scheduler to make scheduling decisions in scenario of dynamic replica assignment based on cluster free resources.
                                                        Disable if it does not fit your cases for better performance. (default true)
@@ -80,10 +83,12 @@ Generic flags:
                                                        LoggingBetaOptions=true|false (BETA - default=true)
                                                        MultiClusterService=true|false (ALPHA - default=false)
                                                        MultiplePodTemplatesScheduling=true|false (ALPHA - default=false)
-                                                       PriorityBasedScheduling=true|false (ALPHA - default=false)
+                                                       PriorityBasedPreemptiveScheduling=true|false (ALPHA - default=false)
+                                                       PriorityBasedScheduling=true|false (BETA - default=true)
                                                        PropagateDeps=true|false (BETA - default=true)
                                                        PropagationPolicyPreemption=true|false (ALPHA - default=false)
                                                        ResourceQuotaEstimate=true|false (ALPHA - default=false)
+                                                       SchedulingOvercommitProtection=true|false (ALPHA - default=false)
                                                        StatefulFailoverInjection=true|false (ALPHA - default=false)
                                                        WorkloadAffinity=true|false (ALPHA - default=false)
       --health-probe-bind-address string               The TCP address that the controller should bind to for serving health probes(e.g. 127.0.0.1:10357, :10357). It can be set to "0" to disable serving the health probe. Defaults to 0.0.0.0:10357. (default ":10357")

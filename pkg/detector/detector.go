@@ -387,7 +387,7 @@ func (d *ResourceDetector) LookForMatchedPolicy(object *unstructured.Unstructure
 	policyList := &policyv1alpha1.PropagationPolicyList{}
 	err := d.Client.List(context.TODO(), policyList, &client.ListOptions{
 		Namespace:             objectKey.Namespace,
-		UnsafeDisableDeepCopy: ptr.To(true),
+		UnsafeDisableDeepCopy: new(true),
 	})
 	if err != nil {
 		klog.Errorf("Failed to list propagation policy: %v", err)
@@ -414,7 +414,7 @@ func (d *ResourceDetector) LookForMatchedClusterPolicy(object *unstructured.Unst
 	klog.V(2).Infof("Attempts to match cluster policy for resource(%s)", objectKey)
 	policyList := &policyv1alpha1.ClusterPropagationPolicyList{}
 	err := d.Client.List(context.TODO(), policyList, &client.ListOptions{
-		UnsafeDisableDeepCopy: ptr.To(true),
+		UnsafeDisableDeepCopy: new(true),
 	})
 	if err != nil {
 		klog.Errorf("Failed to list cluster propagation policy: %v", err)
@@ -875,8 +875,10 @@ func (d *ResourceDetector) BuildResourceBinding(object *unstructured.Unstructure
 			}
 			bindingSchedulePriority = &workv1alpha2.SchedulePriority{
 				Priority: kubePriorityClass.Value,
-				// TODO add preemptionpolicy
-				// PreemptionPolicy: kubePriorityClass.PreemptionPolicy,
+			}
+			if features.PriorityBasedPreemptiveSchedulingEnabled() && kubePriorityClass.PreemptionPolicy != nil &&
+				*kubePriorityClass.PreemptionPolicy == corev1.PreemptLowerPriority {
+				bindingSchedulePriority.PreemptionPolicy = ptr.To(workv1alpha2.PreemptLowerPriority)
 			}
 		case policyv1alpha1.PodPriorityClass:
 			return nil, fmt.Errorf("priority class source is PodPriorityClass, but PodPriorityClass is not supported yet")
